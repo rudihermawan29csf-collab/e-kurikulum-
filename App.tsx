@@ -126,33 +126,34 @@ const App: React.FC = () => {
       
       const errorMessage = (e.message || "").toLowerCase();
       
-      // ANALISA ERROR & BERI SOLUSI
+      // ANALISA ERROR & BERI SOLUSI KHUSUS
       if (errorMessage.includes("driveapp") || errorMessage.includes("permission") || errorMessage.includes("izin")) {
-          alert(
-            "🛑 MASALAH IZIN GOOGLE DRIVE\n\n" +
-            "Script tidak boleh upload file. Solusi:\n" +
-            "1. Buka Editor App Script\n" +
-            "2. Buat fungsi test sederhana (panggil DriveApp) & Jalankan\n" +
-            "3. Klik 'Allow' pada popup izin\n" +
-            "4. PENTING: Lakukan Deploy Ulang (New Version)"
-          );
+          const solution = 
+            "🛑 IZIN AKSES DITOLAK (Google Drive)\n\n" +
+            "Script gagal membuat file karena belum diizinkan oleh Pemilik Script.\n\n" +
+            "SOLUSI (Wajib dilakukan Pemilik):\n" +
+            "1. Buka Editor Google Apps Script.\n" +
+            "2. Jalankan fungsi apa saja (misal: 'doGet' atau buat fungsi dummy 'test') dengan tombol Run/Jalankan.\n" +
+            "3. Akan muncul popup 'Authorization Required'.\n" +
+            "4. Klik Review Permissions -> Pilih Akun -> Advanced/Lanjutan -> Buka ... (Unsafe) -> Allow/Izinkan.\n" +
+            "5. TERAKHIR: Deploy Ulang (Manage Deployments -> New Version).";
+          
+          alert(solution);
+          // Kita lempar error baru yang lebih bersih untuk UI
+          throw new Error("Izin DriveApp belum diberikan. Cek Alert untuk solusi.");
       } else if (errorMessage.includes("unknown error") || errorMessage.includes("script error")) {
           alert(
-            "⚠️ CONFIGURATION ERROR\n\n" +
-            "Terjadi kesalahan 'Unknown Error' dari Google. \n" +
-            "Penyebab paling umum:\n" +
-            "1. Deployment 'Who has access' TIDAK diset ke 'Anyone'.\n" +
-            "2. Konflik akun Google (Coba Mode Incognito).\n" +
-            "3. Lupa klik 'New Version' saat deploy ulang."
+            "⚠️ KONEKSI GAGAL\n\n" +
+            "Terjadi 'Unknown Error'. Coba solusi ini:\n" +
+            "1. Pastikan Deploy 'Who has access' = 'Anyone'.\n" +
+            "2. Jangan gunakan akun ganda (Login 1 akun saja atau Mode Incognito).\n" +
+            "3. Deploy ulang dengan 'New Version'."
           );
       } else if (errorMessage.includes("html") || errorMessage.includes("<")) {
-          alert(
-             "⚠️ DEPLOYMENT ERROR\n\n" +
-             "Server merespon dengan halaman HTML (bukan data). \n" +
-             "Mohon Deploy Ulang (New Version) di App Script."
-          );
+          alert("⚠️ DEPLOYMENT ERROR: Script URL mungkin salah atau deployment belum diupdate.");
       } else {
-          alert(`Gagal menyimpan: ${e.message}`);
+          // Jangan alert lagi jika error biasa, biarkan DocumentView menanganinya di UI
+          // alert(`Gagal menyimpan: ${e.message}`);
       }
       
       throw e; 

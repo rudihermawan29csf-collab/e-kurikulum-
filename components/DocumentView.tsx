@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { IDocument, Role, FolderItem, AppConfig } from '../types';
-import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File } from 'lucide-react';
+import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File, AlertCircle } from 'lucide-react';
 
 interface DocumentViewProps {
   userRole: Role;
@@ -16,6 +16,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   const [newDocData, setNewDocData] = useState({
     name: '',
@@ -69,6 +70,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
           return;
       }
       setNewDocData({ ...newDocData, file: file });
+      setUploadError(null);
     }
   };
 
@@ -81,10 +83,12 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
       date: new Date().toISOString().split('T')[0],
       file: null
     });
+    setUploadError(null);
     setIsModalOpen(true);
   };
 
   const handleSaveDocument = async () => {
+    setUploadError(null);
     if (!newDocData.name || !newDocData.category || !newDocData.file || !newDocData.year || !newDocData.semester) {
       alert('Mohon lengkapi semua data.');
       return;
@@ -119,9 +123,11 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
         setExpandedKeys(newKeys);
         
         setIsModalOpen(false);
-    } catch (e) {
+    } catch (e: any) {
         // Jika error, jangan tutup modal, biarkan user mencoba lagi
         console.error("Save failed in view", e);
+        // Tampilkan pesan error di UI
+        setUploadError(e.message || "Gagal menyimpan dokumen.");
     } finally {
         setIsUploading(false);
     }
@@ -368,6 +374,18 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
             </div>
             
             <div className="p-6 space-y-4 overflow-y-auto">
+              
+              {/* Pesan Error di dalam Modal */}
+              {uploadError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2">
+                     <AlertCircle size={16} className="mt-0.5 shrink-0"/>
+                     <div className="flex-1">
+                       <p className="font-bold text-xs">Gagal Menyimpan</p>
+                       <p className="text-xs opacity-90">{uploadError}</p>
+                     </div>
+                  </div>
+              )}
+
               {isUploading ? (
                   <div className="flex flex-col items-center justify-center py-10 space-y-4">
                       <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>

@@ -2,7 +2,7 @@ import { IDocument, FolderItem, AppConfig } from '../types';
 
 // PASTIKAN INI ADALAH URL DARI DEPLOYMENT 'WEB APP' ANDA SENDIRI
 // Akhirannya harus '/exec', bukan '/edit'
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwSGP2YwOuCa6DoTKcZK4LHf2x25SaEQIY8-Zx-dMVmhpv6lezJPF-2N0Ly-IRX7jA9xw/exec'; 
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGXiBxmDd4yszugCoudnxbMZNwQKU5P2DEqDxyMxIA0CESEwFc4SUB2Uk0rMyoZTbu3g/exec'; 
 
 export const api = {
   // 1. Get All Data
