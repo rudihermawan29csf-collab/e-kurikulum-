@@ -1,0 +1,5 @@
+{
+  "name": "SMPN 3 Pacet - Curriculum DB",
+  "description": "A centralized, macOS-styled curriculum database system for SMPN 3 Pacet to manage documents, schedules, and reports.",
+  "requestFramePermissions": []
+}
