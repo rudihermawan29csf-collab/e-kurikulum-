@@ -7,7 +7,7 @@ interface DocumentViewProps {
   folders: FolderItem[];
   appConfig: AppConfig;
   documents: IDocument[];
-  onAddDocument: (doc: IDocument, file: File | null) => void;
+  onAddDocument: (doc: IDocument, file: File | null) => Promise<void>;
   onDeleteDocument: (id: string) => void;
 }
 
@@ -61,7 +61,14 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setNewDocData({ ...newDocData, file: e.target.files[0] });
+      const file = e.target.files[0];
+      // VALIDASI: Batasi 4MB agar App Script tidak timeout/crash
+      if (file.size > 4 * 1024 * 1024) {
+          alert("Ukuran file terlalu besar! Maksimal 4MB agar server Google Script tidak error.");
+          e.target.value = ""; // Reset input
+          return;
+      }
+      setNewDocData({ ...newDocData, file: file });
     }
   };
 
@@ -85,7 +92,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
 
     setIsUploading(true);
     const extension = newDocData.file.name.split('.').pop()?.toUpperCase() || 'FILE';
-    // NOTE: File URL logic is now handled in App.tsx via API response
     
     const newDoc: IDocument = {
       id: Date.now().toString(),
@@ -101,18 +107,24 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
       fileUrl: '' 
     };
 
-    // Pass the raw File object to App.tsx for uploading
-    await onAddDocument(newDoc, newDocData.file);
-    
-    // Auto expand
-    const newKeys = new Set(expandedKeys);
-    newKeys.add(newDoc.year);
-    newKeys.add(`${newDoc.year}-${newDoc.semester}`);
-    newKeys.add(`${newDoc.year}-${newDoc.semester}-${newDoc.category}`);
-    setExpandedKeys(newKeys);
-
-    setIsUploading(false);
-    setIsModalOpen(false);
+    try {
+        // Pass the raw File object to App.tsx for uploading
+        await onAddDocument(newDoc, newDocData.file);
+        
+        // Auto expand
+        const newKeys = new Set(expandedKeys);
+        newKeys.add(newDoc.year);
+        newKeys.add(`${newDoc.year}-${newDoc.semester}`);
+        newKeys.add(`${newDoc.year}-${newDoc.semester}-${newDoc.category}`);
+        setExpandedKeys(newKeys);
+        
+        setIsModalOpen(false);
+    } catch (e) {
+        // Jika error, jangan tutup modal, biarkan user mencoba lagi
+        console.error("Save failed in view", e);
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   const handleDownload = (doc: IDocument) => {
@@ -359,8 +371,10 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
               {isUploading ? (
                   <div className="flex flex-col items-center justify-center py-10 space-y-4">
                       <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-sm font-semibold text-gray-700">Mengupload ke Database & Drive...</p>
-                      <p className="text-xs text-gray-500">Mohon tunggu sebentar.</p>
+                      <p className="text-sm font-semibold text-gray-700">Menyimpan ke Database...</p>
+                      <p className="text-xs text-gray-500 text-center max-w-[250px]">
+                        Mohon jangan tutup halaman. Proses upload ke Google Drive mungkin memakan waktu hingga 10-30 detik.
+                      </p>
                   </div>
               ) : (
                 <>
@@ -427,7 +441,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload File</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Upload File (Max 4MB)</label>
                     <div 
                     onClick={() => fileInputRef.current?.click()}
                     className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-colors ${newDocData.file ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}
@@ -453,7 +467,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                             <UploadCloud size={20} />
                         </div>
                         <p className="text-sm text-gray-600 text-center">Klik untuk upload file</p>
-                        <p className="text-xs text-gray-400 text-center mt-1">PDF, Word, Excel, Gambar</p>
+                        <p className="text-xs text-gray-400 text-center mt-1">PDF, Word, Excel, Gambar (Max 4MB)</p>
                         </>
                     )}
                     </div>

@@ -7,7 +7,10 @@ export const api = {
   // 1. Get All Data
   fetchData: async () => {
     try {
-      const response = await fetch(`${SCRIPT_URL}?action=getData`);
+      // PENAMBAHAN PENTING: &t=${new Date().getTime()}
+      // Ini mencegah browser menggunakan cache lama, sehingga data yang baru disimpan pasti muncul.
+      const response = await fetch(`${SCRIPT_URL}?action=getData&t=${new Date().getTime()}`);
+      
       if (!response.ok) throw new Error('Network response was not ok');
       
       const text = await response.text();
@@ -33,15 +36,17 @@ export const api = {
         mimeType
       };
       
-      // Menggunakan 'body' string secara langsung tanpa header Content-Type 'application/json'
-      // agar browser menganggapnya sebagai 'text/plain' dan TIDAK mengirim preflight OPTIONS
-      // yang sering gagal di Google Apps Script.
       const response = await fetch(`${SCRIPT_URL}?action=addDocument`, {
         method: 'POST',
+        redirect: 'follow', // PENTING: Ikuti redirect Google Script
         body: JSON.stringify(payload)
       });
       
       const text = await response.text();
+      // Handle jika respon HTML (error page) bukan JSON
+      if (text.trim().startsWith('<')) {
+          throw new Error("Server response was HTML (Error Page), not JSON.");
+      }
       return JSON.parse(text);
     } catch (error) {
       console.error("Error adding document:", error);
@@ -52,7 +57,10 @@ export const api = {
   // 3. Delete Document
   deleteDocument: async (id: string) => {
     try {
-      await fetch(`${SCRIPT_URL}?action=deleteDocument&id=${id}`, { method: 'POST' });
+      await fetch(`${SCRIPT_URL}?action=deleteDocument&id=${id}`, { 
+          method: 'POST',
+          redirect: 'follow'
+      });
     } catch (error) {
       console.error("Error deleting document:", error);
     }
@@ -63,6 +71,7 @@ export const api = {
     try {
         await fetch(`${SCRIPT_URL}?action=addFolder`, {
             method: 'POST',
+            redirect: 'follow',
             body: JSON.stringify(folder)
         });
     } catch (error) {
@@ -75,6 +84,7 @@ export const api = {
     try {
         await fetch(`${SCRIPT_URL}?action=updateFolder`, {
             method: 'POST',
+            redirect: 'follow',
             body: JSON.stringify(folder)
         });
     } catch (error) {
@@ -85,7 +95,10 @@ export const api = {
   // 6. Delete Folder
   deleteFolder: async (id: string) => {
     try {
-        await fetch(`${SCRIPT_URL}?action=deleteFolder&id=${id}`, { method: 'POST' });
+        await fetch(`${SCRIPT_URL}?action=deleteFolder&id=${id}`, { 
+            method: 'POST',
+            redirect: 'follow' 
+        });
     } catch (error) {
         console.error("Error deleting folder", error);
     }
@@ -96,6 +109,7 @@ export const api = {
     try {
         await fetch(`${SCRIPT_URL}?action=updateConfig`, {
             method: 'POST',
+            redirect: 'follow',
             body: JSON.stringify(config)
         });
     } catch (error) {

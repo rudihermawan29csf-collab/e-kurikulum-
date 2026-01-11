@@ -96,11 +96,7 @@ const App: React.FC = () => {
   };
 
   const handleAddDocument = async (newDoc: IDocument, file: File | null) => {
-    // 1. Optimistic Update (Show immediately)
-    const optimisticDoc = { ...newDoc, status: 'Draft' as const };
-    setDocuments(prev => [optimisticDoc, ...prev]);
-
-    // 2. Prepare File Upload (Convert to Base64)
+    // 1. Prepare File Upload (Convert to Base64)
     let base64String: string | null = null;
     if (file) {
       base64String = await new Promise((resolve) => {
@@ -110,27 +106,40 @@ const App: React.FC = () => {
       });
     }
 
-    // 3. Send to API
+    // 2. Send to API (Tunggu sampai server benar-benar merespon sukses)
     try {
       const response = await api.addDocument(newDoc, base64String, file?.type || 'application/octet-stream');
+      
       if (response && response.status === 'success') {
-         // Update with real URL from Drive if available
-         setDocuments(prev => prev.map(d => d.id === newDoc.id ? { ...d, fileUrl: response.fileUrl, status: 'Valid' } : d));
+         // 3. Update State hanya jika sukses
+         // Update URL file dari respon server
+         const savedDoc = { 
+            ...newDoc, 
+            fileUrl: response.fileUrl || '', 
+            status: 'Valid' as const 
+         };
+
+         setDocuments(prev => [savedDoc, ...prev]);
          
          // Update Folder Count
          setFolders(prev => prev.map(f => f.name === newDoc.category ? { ...f, docCount: f.docCount + 1 } : f));
+         
+         alert("Dokumen berhasil disimpan ke Database!");
+      } else {
+         throw new Error(response?.message || 'Server menolak penyimpanan data.');
       }
-    } catch (e) {
-      alert("Gagal upload ke server. Cek koneksi internet.");
-      // Rollback
-      setDocuments(prev => prev.filter(d => d.id !== newDoc.id));
+    } catch (e: any) {
+      console.error("Upload failed:", e);
+      // Tampilkan error spesifik
+      alert(`Gagal menyimpan: ${e.message || "Koneksi terputus atau file terlalu besar."}`);
+      throw e; // Lempar error agar modal di DocumentView tidak tertutup
     }
   };
 
   const handleDeleteDocument = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini dari Database Online?')) {
       const docToDelete = documents.find(d => d.id === id);
-      // Optimistic delete
+      // Optimistic delete is safer than add
       setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== id));
       if (docToDelete) {
          setFolders(prev => prev.map(f => f.name === docToDelete.category ? { ...f, docCount: f.docCount - 1 } : f));
