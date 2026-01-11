@@ -52,22 +52,36 @@ const App: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     setIsError(false);
-    const data = await api.fetchData();
     
-    if (data && data.status === 'success') {
-      setDocuments(data.docs);
-      // Clean up folders data (convert boolean strings if necessary)
-      const cleanFolders = data.folders.map((f: any) => ({
-        ...f,
-        // Calculate doc count dynamically based on fetched docs
-        docCount: data.docs.filter((d: any) => d.category === f.name).length
-      }));
-      setFolders(cleanFolders);
-      if (data.config) setAppConfig(data.config);
-    } else {
+    try {
+      const data = await api.fetchData();
+      
+      if (data && data.status === 'success') {
+        // SAFETY CHECK: Ensure arrays exist before mapping
+        const docs = Array.isArray(data.docs) ? data.docs : [];
+        const rawFolders = Array.isArray(data.folders) ? data.folders : [];
+
+        setDocuments(docs);
+        
+        // Clean up folders data
+        const cleanFolders = rawFolders.map((f: any) => ({
+          ...f,
+          // Calculate doc count dynamically based on fetched docs
+          docCount: docs.filter((d: any) => d.category === f.name).length
+        }));
+        setFolders(cleanFolders);
+        
+        if (data.config) setAppConfig(data.config);
+      } else {
+        console.warn("Data fetch returned invalid status or structure", data);
+        setIsError(true);
+      }
+    } catch (e) {
+      console.error("Critical error loading data:", e);
       setIsError(true);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleLogin = (role: Role) => {
@@ -127,11 +141,6 @@ const App: React.FC = () => {
   };
 
   const handleUpdateFolders = async (newFolders: FolderItem[]) => {
-      // Find difference to determine Add/Delete/Update action
-      // For simplicity in this demo, we assume the SettingsView passes the *entire* new list
-      // But we need to know *what* changed to call specific API.
-      // So we will change SettingsView to call API directly or pass specific actions.
-      // For now, let's just update local state to reflect UI changes immediately.
       setFolders(newFolders);
   };
   

@@ -8,8 +8,16 @@ export const api = {
   fetchData: async () => {
     try {
       const response = await fetch(`${SCRIPT_URL}?action=getData`);
-      const result = await response.json();
-      return result;
+      if (!response.ok) throw new Error('Network response was not ok');
+      
+      const text = await response.text();
+      try {
+        const result = JSON.parse(text);
+        return result;
+      } catch (e) {
+        console.error("Failed to parse JSON:", text);
+        return null;
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
       return null;
@@ -25,11 +33,16 @@ export const api = {
         mimeType
       };
       
+      // Menggunakan 'body' string secara langsung tanpa header Content-Type 'application/json'
+      // agar browser menganggapnya sebagai 'text/plain' dan TIDAK mengirim preflight OPTIONS
+      // yang sering gagal di Google Apps Script.
       const response = await fetch(`${SCRIPT_URL}?action=addDocument`, {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      return await response.json();
+      
+      const text = await response.text();
+      return JSON.parse(text);
     } catch (error) {
       console.error("Error adding document:", error);
       throw error;
