@@ -57,16 +57,13 @@ const App: React.FC = () => {
       const data = await api.fetchData();
       
       if (data && data.status === 'success') {
-        // SAFETY CHECK: Ensure arrays exist before mapping
         const docs = Array.isArray(data.docs) ? data.docs : [];
         const rawFolders = Array.isArray(data.folders) ? data.folders : [];
 
         setDocuments(docs);
         
-        // Clean up folders data
         const cleanFolders = rawFolders.map((f: any) => ({
           ...f,
-          // Calculate doc count dynamically based on fetched docs
           docCount: docs.filter((d: any) => d.category === f.name).length
         }));
         setFolders(cleanFolders);
@@ -106,13 +103,11 @@ const App: React.FC = () => {
       });
     }
 
-    // 2. Send to API (Tunggu sampai server benar-benar merespon sukses)
+    // 2. Send to API
     try {
       const response = await api.addDocument(newDoc, base64String, file?.type || 'application/octet-stream');
       
       if (response && response.status === 'success') {
-         // 3. Update State hanya jika sukses
-         // Update URL file dari respon server
          const savedDoc = { 
             ...newDoc, 
             fileUrl: response.fileUrl || '', 
@@ -120,26 +115,53 @@ const App: React.FC = () => {
          };
 
          setDocuments(prev => [savedDoc, ...prev]);
-         
-         // Update Folder Count
          setFolders(prev => prev.map(f => f.name === newDoc.category ? { ...f, docCount: f.docCount + 1 } : f));
          
          alert("Dokumen berhasil disimpan ke Database!");
       } else {
-         throw new Error(response?.message || 'Server menolak penyimpanan data.');
+         throw new Error(response?.message || 'Gagal menyimpan data (Unknown reason).');
       }
     } catch (e: any) {
       console.error("Upload failed:", e);
-      // Tampilkan error spesifik
-      alert(`Gagal menyimpan: ${e.message || "Koneksi terputus atau file terlalu besar."}`);
-      throw e; // Lempar error agar modal di DocumentView tidak tertutup
+      
+      const errorMessage = (e.message || "").toLowerCase();
+      
+      // ANALISA ERROR & BERI SOLUSI
+      if (errorMessage.includes("driveapp") || errorMessage.includes("permission") || errorMessage.includes("izin")) {
+          alert(
+            "🛑 MASALAH IZIN GOOGLE DRIVE\n\n" +
+            "Script tidak boleh upload file. Solusi:\n" +
+            "1. Buka Editor App Script\n" +
+            "2. Buat fungsi test sederhana (panggil DriveApp) & Jalankan\n" +
+            "3. Klik 'Allow' pada popup izin\n" +
+            "4. PENTING: Lakukan Deploy Ulang (New Version)"
+          );
+      } else if (errorMessage.includes("unknown error") || errorMessage.includes("script error")) {
+          alert(
+            "⚠️ CONFIGURATION ERROR\n\n" +
+            "Terjadi kesalahan 'Unknown Error' dari Google. \n" +
+            "Penyebab paling umum:\n" +
+            "1. Deployment 'Who has access' TIDAK diset ke 'Anyone'.\n" +
+            "2. Konflik akun Google (Coba Mode Incognito).\n" +
+            "3. Lupa klik 'New Version' saat deploy ulang."
+          );
+      } else if (errorMessage.includes("html") || errorMessage.includes("<")) {
+          alert(
+             "⚠️ DEPLOYMENT ERROR\n\n" +
+             "Server merespon dengan halaman HTML (bukan data). \n" +
+             "Mohon Deploy Ulang (New Version) di App Script."
+          );
+      } else {
+          alert(`Gagal menyimpan: ${e.message}`);
+      }
+      
+      throw e; 
     }
   };
 
   const handleDeleteDocument = async (id: string) => {
     if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini dari Database Online?')) {
       const docToDelete = documents.find(d => d.id === id);
-      // Optimistic delete is safer than add
       setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== id));
       if (docToDelete) {
          setFolders(prev => prev.map(f => f.name === docToDelete.category ? { ...f, docCount: f.docCount - 1 } : f));
