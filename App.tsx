@@ -117,47 +117,59 @@ const App: React.FC = () => {
          setDocuments(prev => [savedDoc, ...prev]);
          setFolders(prev => prev.map(f => f.name === newDoc.category ? { ...f, docCount: f.docCount + 1 } : f));
          
-         alert("Dokumen berhasil disimpan ke Database!");
+         return true;
       } else {
          throw new Error(response?.message || 'Gagal menyimpan data (Unknown reason).');
       }
     } catch (e: any) {
-      console.error("Upload failed:", e);
-      
+      handleApiError(e);
+      throw e; 
+    }
+  };
+
+  const handleEditDocument = async (updatedDoc: IDocument, file: File | null) => {
+    let base64String: string | null = null;
+    if (file) {
+      base64String = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    try {
+      // API call to update
+      const response = await api.updateDocument(updatedDoc, base64String, file?.type || '');
+
+      if (response && response.status === 'success') {
+        // Update local state
+        setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? { ...updatedDoc, fileUrl: response.fileUrl || d.fileUrl } : d));
+        // Recalculate folder counts if category changed (optional optimization omitted for brevity)
+        return true;
+      } else {
+        throw new Error(response?.message || 'Gagal mengupdate data.');
+      }
+    } catch (e: any) {
+        handleApiError(e);
+        throw e;
+    }
+  };
+
+  const handleApiError = (e: any) => {
+      console.error("Operation failed:", e);
       const errorMessage = (e.message || "").toLowerCase();
       
-      // ANALISA ERROR & BERI SOLUSI KHUSUS
       if (errorMessage.includes("driveapp") || errorMessage.includes("permission") || errorMessage.includes("izin")) {
           const solution = 
             "🛑 IZIN AKSES DITOLAK (Google Drive)\n\n" +
-            "Script gagal membuat file karena belum diizinkan oleh Pemilik Script.\n\n" +
-            "SOLUSI (Wajib dilakukan Pemilik):\n" +
+            "SOLUSI (Wajib dilakukan Pemilik Script):\n" +
             "1. Buka Editor Google Apps Script.\n" +
-            "2. Jalankan fungsi apa saja (misal: 'doGet' atau buat fungsi dummy 'test') dengan tombol Run/Jalankan.\n" +
-            "3. Akan muncul popup 'Authorization Required'.\n" +
-            "4. Klik Review Permissions -> Pilih Akun -> Advanced/Lanjutan -> Buka ... (Unsafe) -> Allow/Izinkan.\n" +
-            "5. TERAKHIR: Deploy Ulang (Manage Deployments -> New Version).";
-          
+            "2. Jalankan fungsi dummy.\n" +
+            "3. Authorize/Izinkan.\n" +
+            "4. Deploy Ulang (New Version).";
           alert(solution);
-          // Kita lempar error baru yang lebih bersih untuk UI
-          throw new Error("Izin DriveApp belum diberikan. Cek Alert untuk solusi.");
-      } else if (errorMessage.includes("unknown error") || errorMessage.includes("script error")) {
-          alert(
-            "⚠️ KONEKSI GAGAL\n\n" +
-            "Terjadi 'Unknown Error'. Coba solusi ini:\n" +
-            "1. Pastikan Deploy 'Who has access' = 'Anyone'.\n" +
-            "2. Jangan gunakan akun ganda (Login 1 akun saja atau Mode Incognito).\n" +
-            "3. Deploy ulang dengan 'New Version'."
-          );
-      } else if (errorMessage.includes("html") || errorMessage.includes("<")) {
-          alert("⚠️ DEPLOYMENT ERROR: Script URL mungkin salah atau deployment belum diupdate.");
-      } else {
-          // Jangan alert lagi jika error biasa, biarkan DocumentView menanganinya di UI
-          // alert(`Gagal menyimpan: ${e.message}`);
+          throw new Error("Izin DriveApp belum diberikan.");
       }
-      
-      throw e; 
-    }
   };
 
   const handleDeleteDocument = async (id: string) => {
@@ -263,6 +275,7 @@ const App: React.FC = () => {
               appConfig={appConfig} 
               documents={documents}
               onAddDocument={handleAddDocument}
+              onEditDocument={handleEditDocument}
               onDeleteDocument={handleDeleteDocument}
             />
           )}

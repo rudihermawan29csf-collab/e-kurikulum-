@@ -35,33 +35,58 @@ export const api = {
       const response = await fetch(`${SCRIPT_URL}?action=addDocument`, {
         method: 'POST',
         redirect: 'follow',
-        // PENTING: Force text/plain untuk mencegah Preflight Request (OPTIONS) yang sering gagal di Google Script
-        headers: {
-          "Content-Type": "text/plain;charset=utf-8",
-        },
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(payload)
       });
       
       const text = await response.text();
-      
-      // LOG PENTING: Lihat apa balasan asli dari Google di Console
-      console.log("RAW Server Response:", text);
+      console.log("RAW Server Response (Add):", text);
 
-      // Cek apakah responnya HTML (Error Page Google)
       if (text.trim().startsWith('<')) {
-          throw new Error("Google Script Error: Kemungkinan masalah Izin atau Deployment. Cek 'Deploy > Manage Deployments' dan buat 'New Version'.");
+          throw new Error("Google Script Error: Cek Izin atau Deployment.");
       }
       
-      // Coba parse JSON
       try {
         return JSON.parse(text);
       } catch (e) {
-        // Jika gagal parse JSON, berarti Google mengirim pesan error text biasa (seperti 'An unknown error...')
-        // Kita jadikan teks tersebut sebagai pesan error
         throw new Error(text.length < 200 ? text : "Respon server tidak valid.");
       }
     } catch (error) {
       console.error("Error adding document:", error);
+      throw error;
+    }
+  },
+
+  // 2.5 Update Document (Revisi)
+  updateDocument: async (doc: IDocument, fileBase64: string | null, mimeType: string) => {
+    try {
+      const payload = {
+        ...doc,
+        fileBase64, // Jika null, berarti file tidak diganti
+        mimeType
+      };
+      
+      const response = await fetch(`${SCRIPT_URL}?action=updateDocument`, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      });
+      
+      const text = await response.text();
+      console.log("RAW Server Response (Update):", text);
+
+      if (text.trim().startsWith('<')) {
+          throw new Error("Google Script Error: Cek Izin atau Deployment.");
+      }
+      
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error(text.length < 200 ? text : "Respon server tidak valid.");
+      }
+    } catch (error) {
+      console.error("Error updating document:", error);
       throw error;
     }
   },

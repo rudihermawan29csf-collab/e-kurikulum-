@@ -26,10 +26,11 @@ export interface IDocument {
   uploadDate: string;
   author: string;
   size: string;
-  status: 'Draft' | 'Valid' | 'Arsip';
+  status: 'Draft' | 'Valid' | 'Arsip' | 'Revisi'; // Added Revisi
   year: string;
   semester?: string;
   fileUrl?: string;
+  adminComment?: string; // New field for Admin Comments
 }
 
 export interface IDashboardStat {
