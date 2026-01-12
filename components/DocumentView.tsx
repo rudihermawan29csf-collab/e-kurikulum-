@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { IDocument, Role, FolderItem, AppConfig } from '../types';
-import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning, MessageSquare } from 'lucide-react';
+import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning, MessageSquare, Loader2 } from 'lucide-react';
 
 interface DocumentViewProps {
   userRole: Role;
@@ -26,6 +26,9 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number, currentFile: string}>({current: 0, total: 0, currentFile: ''});
   
+  // State for deleting (loading indicator)
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [newDocData, setNewDocData] = useState({
     name: '',
     year: '',
@@ -171,18 +174,18 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                 uploadDate: newDocData.date,
                 author: 'Admin', 
                 size: newFile ? `${(newFile.size / 1024 / 1024).toFixed(2)} MB` : '0 MB', 
-                status: newDocData.status, // Use updated status
+                status: newDocData.status, 
                 year: newDocData.year,
                 semester: newDocData.semester,
-                fileUrl: '', // Will be updated by response
-                adminComment: newDocData.adminComment // Use updated comment
+                fileUrl: '', 
+                adminComment: newDocData.adminComment 
             };
 
             await onEditDocument(updatedDoc, newFile);
             alert("Dokumen berhasil direvisi!");
             setIsModalOpen(false);
         } catch (e: any) {
-            setUploadError(e.message);
+            setUploadError(e.message || "Terjadi kesalahan saat menyimpan.");
         } finally {
             setIsUploading(false);
         }
@@ -261,6 +264,15 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
         alert("File belum tersedia atau masih dalam proses upload.");
     }
   };
+  
+  const handleDeleteClick = async (id: string) => {
+      setDeletingId(id);
+      try {
+        await onDeleteDocument(id);
+      } finally {
+        setDeletingId(null);
+      }
+  };
 
   const getFileIcon = (type: string) => {
     const t = type.toUpperCase();
@@ -329,16 +341,16 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
               <td className="px-6 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <button 
-                    onClick={() => handleDownload(doc)} 
+                    onClick={(e) => { e.stopPropagation(); handleDownload(doc); }} 
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-green-700 active:scale-95 transition-all text-xs font-bold tracking-wide"
                   >
                     <Download size={14}/> Download
                   </button>
                   
-                  {/* EDIT BUTTON (Available for Admin OR if doc needs revision) */}
+                  {/* EDIT BUTTON */}
                   {(userRole === 'ADMIN' || doc.status === 'Revisi' || doc.adminComment) && (
                       <button 
-                        onClick={() => openEditModal(doc)}
+                        onClick={(e) => { e.stopPropagation(); openEditModal(doc); }}
                         className="bg-amber-50 text-amber-600 p-1.5 rounded-lg border border-amber-100 hover:bg-amber-100 transition-colors"
                         title="Edit / Revisi"
                       >
@@ -346,13 +358,15 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                       </button>
                   )}
 
+                  {/* DELETE BUTTON */}
                   {userRole === 'ADMIN' && (
                     <button 
-                        onClick={() => onDeleteDocument(doc.id)}
-                        className="bg-red-50 text-red-500 p-1.5 rounded-lg border border-red-100 hover:bg-red-100 hover:text-red-700 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(doc.id); }}
+                        className="bg-red-50 text-red-500 p-1.5 rounded-lg border border-red-100 hover:bg-red-100 hover:text-red-700 transition-colors relative"
                         title="Hapus Dokumen"
+                        disabled={deletingId === doc.id}
                     >
-                        <Trash2 size={14}/>
+                        {deletingId === doc.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14}/>}
                     </button>
                   )}
                 </div>

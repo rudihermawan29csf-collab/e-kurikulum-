@@ -1,11 +1,42 @@
 import { IDocument, FolderItem, AppConfig } from '../types';
 
-// PASTIKAN INI ADALAH URL DARI DEPLOYMENT 'WEB APP' ANDA SENDIRI
-// Akhirannya harus '/exec', bukan '/edit'
+// URL Deployment Google Apps Script Anda
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGXiBxmDd4yszugCoudnxbMZNwQKU5P2DEqDxyMxIA0CESEwFc4SUB2Uk0rMyoZTbu3g/exec'; 
 
+// Helper untuk menghandle request standard GAS
+const sendRequest = async (action: string, payload: any = {}) => {
+  try {
+    // Kita kirim action di URL (untuk routing mudah) DAN di Body (untuk data)
+    // Menggunakan 'no-cors' tidak disarankan karena kita butuh response JSON.
+    // Kuncinya adalah Content-Type: text/plain untuk menghindari Preflight (OPTIONS) request yang sering gagal di GAS.
+    const response = await fetch(`${SCRIPT_URL}?action=${action}`, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ ...payload, action }) // Sertakan action di body juga untuk keamanan
+    });
+
+    const text = await response.text();
+    console.log(`[API ${action}] Response:`, text.substring(0, 100) + "...");
+
+    if (text.trim().startsWith('<')) {
+        throw new Error("Google Script Error: Terjadi kesalahan pada server (HTML Response).");
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      // Jika response text 'Success' atau plain text lainnya
+      return { status: 'success', message: text }; 
+    }
+  } catch (error) {
+    console.error(`[API ${action}] Error:`, error);
+    throw error;
+  }
+};
+
 export const api = {
-  // 1. Get All Data
+  // 1. Get All Data (GET request remains same)
   fetchData: async () => {
     try {
       const response = await fetch(`${SCRIPT_URL}?action=getData&t=${new Date().getTime()}`);
@@ -25,137 +56,45 @@ export const api = {
 
   // 2. Add Document
   addDocument: async (doc: IDocument, fileBase64: string | null, mimeType: string) => {
-    try {
-      const payload = {
+    return sendRequest('addDocument', {
         ...doc,
         fileBase64,
         mimeType
-      };
-      
-      const response = await fetch(`${SCRIPT_URL}?action=addDocument`, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      });
-      
-      const text = await response.text();
-      console.log("RAW Server Response (Add):", text);
-
-      if (text.trim().startsWith('<')) {
-          throw new Error("Google Script Error: Cek Izin atau Deployment.");
-      }
-      
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        throw new Error(text.length < 200 ? text : "Respon server tidak valid.");
-      }
-    } catch (error) {
-      console.error("Error adding document:", error);
-      throw error;
-    }
+    });
   },
 
-  // 2.5 Update Document (Revisi)
+  // 3. Update Document (Revisi/Edit)
   updateDocument: async (doc: IDocument, fileBase64: string | null, mimeType: string) => {
-    try {
-      const payload = {
+    return sendRequest('updateDocument', {
         ...doc,
-        fileBase64, // Jika null, berarti file tidak diganti
+        fileBase64, // Kirim null jika tidak ada file baru
         mimeType
-      };
-      
-      const response = await fetch(`${SCRIPT_URL}?action=updateDocument`, {
-        method: 'POST',
-        redirect: 'follow',
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      });
-      
-      const text = await response.text();
-      console.log("RAW Server Response (Update):", text);
-
-      if (text.trim().startsWith('<')) {
-          throw new Error("Google Script Error: Cek Izin atau Deployment.");
-      }
-      
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        throw new Error(text.length < 200 ? text : "Respon server tidak valid.");
-      }
-    } catch (error) {
-      console.error("Error updating document:", error);
-      throw error;
-    }
+    });
   },
 
-  // 3. Delete Document
+  // 4. Delete Document
   deleteDocument: async (id: string) => {
-    try {
-      await fetch(`${SCRIPT_URL}?action=deleteDocument&id=${id}`, { 
-          method: 'POST',
-          redirect: 'follow',
-          headers: { "Content-Type": "text/plain;charset=utf-8" }
-      });
-    } catch (error) {
-      console.error("Error deleting document:", error);
-    }
+    // Perbaikan: Mengirim ID via Body, bukan hanya URL parameter
+    return sendRequest('deleteDocument', { id });
   },
 
-  // 4. Add Folder
+  // 5. Add Folder
   addFolder: async (folder: FolderItem) => {
-    try {
-        await fetch(`${SCRIPT_URL}?action=addFolder`, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(folder)
-        });
-    } catch (error) {
-        console.error("Error adding folder", error);
-    }
+    return sendRequest('addFolder', folder);
   },
 
-  // 5. Update Folder
+  // 6. Update Folder
   updateFolder: async (folder: FolderItem) => {
-    try {
-        await fetch(`${SCRIPT_URL}?action=updateFolder`, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(folder)
-        });
-    } catch (error) {
-        console.error("Error updating folder", error);
-    }
+    return sendRequest('updateFolder', folder);
   },
 
-  // 6. Delete Folder
+  // 7. Delete Folder
   deleteFolder: async (id: string) => {
-    try {
-        await fetch(`${SCRIPT_URL}?action=deleteFolder&id=${id}`, { 
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" }
-        });
-    } catch (error) {
-        console.error("Error deleting folder", error);
-    }
+    return sendRequest('deleteFolder', { id });
   },
 
-  // 7. Update Config
+  // 8. Update Config
   updateConfig: async (config: AppConfig) => {
-    try {
-        await fetch(`${SCRIPT_URL}?action=updateConfig`, {
-            method: 'POST',
-            redirect: 'follow',
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(config)
-        });
-    } catch (error) {
-        console.error("Error updating config", error);
-    }
+    return sendRequest('updateConfig', config);
   }
 };
