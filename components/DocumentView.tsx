@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { IDocument, Role, FolderItem, AppConfig } from '../types';
-import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning } from 'lucide-react';
+import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning, MessageSquare } from 'lucide-react';
 
 interface DocumentViewProps {
   userRole: Role;
@@ -32,6 +32,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
     semester: '',
     category: '',
     date: new Date().toISOString().split('T')[0],
+    status: 'Valid' as 'Draft' | 'Valid' | 'Arsip' | 'Revisi',
+    adminComment: '',
     files: [] as File[] 
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -102,6 +104,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
       semester: appConfig.semester,
       category: folders[0]?.name || '',
       date: new Date().toISOString().split('T')[0],
+      status: 'Valid',
+      adminComment: '',
       files: []
     });
     setUploadError(null);
@@ -120,6 +124,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
           semester: doc.semester || appConfig.semester,
           category: doc.category,
           date: doc.uploadDate,
+          status: doc.status || 'Valid',
+          adminComment: doc.adminComment || '',
           files: [] // Kosongkan file saat edit (opsional upload ulang)
       });
       setUploadError(null);
@@ -131,8 +137,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
     setUploadError(null);
     
     // Validasi Basic
-    if (!newDocData.category || !newDocData.year || !newDocData.semester) {
-      alert('Mohon lengkapi data wajib (Tahun, Semester, Kategori).');
+    if (!newDocData.category || !newDocData.year || !newDocData.semester || !newDocData.date) {
+      alert('Mohon lengkapi data wajib (Tahun, Semester, Kategori, Tanggal).');
       return;
     }
 
@@ -161,14 +167,15 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                 id: editingDocId,
                 title: newDocData.name,
                 category: newDocData.category,
-                type: newFile ? (newFile.name.split('.').pop()?.toUpperCase() || 'FILE') : 'UNKNOWN', // Type update if file changes, else backend keeps old
+                type: newFile ? (newFile.name.split('.').pop()?.toUpperCase() || 'FILE') : 'UNKNOWN', 
                 uploadDate: newDocData.date,
-                author: 'Admin', // Atau user login
-                size: newFile ? `${(newFile.size / 1024 / 1024).toFixed(2)} MB` : '0 MB', // Placeholder size update
-                status: 'Valid', // Reset status to Valid after revision? Or keep as is? Let's say Valid.
+                author: 'Admin', 
+                size: newFile ? `${(newFile.size / 1024 / 1024).toFixed(2)} MB` : '0 MB', 
+                status: newDocData.status, // Use updated status
                 year: newDocData.year,
                 semester: newDocData.semester,
-                fileUrl: '' // Will be updated by response
+                fileUrl: '', // Will be updated by response
+                adminComment: newDocData.adminComment // Use updated comment
             };
 
             await onEditDocument(updatedDoc, newFile);
@@ -528,8 +535,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                   </div>
               )}
 
-              {/* TAMPILAN KOMENTAR ADMIN DI MODAL EDIT */}
-              {isEditMode && adminCommentToShow && (
+              {/* TAMPILAN KOMENTAR ADMIN DI MODAL EDIT (MODE NON-ADMIN) */}
+              {isEditMode && userRole !== 'ADMIN' && adminCommentToShow && (
                   <div className="p-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg flex items-start gap-3">
                       <MessageSquareWarning size={20} className="mt-1 shrink-0 text-orange-600"/>
                       <div>
@@ -615,6 +622,49 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                     value={newDocData.name}
                     disabled={(newDocData.files.length > 1 && !isEditMode)}
                     onChange={(e) => setNewDocData({...newDocData, name: e.target.value})}
+                    />
+                </div>
+
+                {/* STATUS & ADMIN COMMENT (ONLY FOR ADMIN IN EDIT MODE) */}
+                {isEditMode && userRole === 'ADMIN' && (
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-3">
+                         <div className="flex items-center gap-2 mb-1">
+                            <MessageSquare size={16} className="text-blue-600"/>
+                            <h4 className="text-sm font-bold text-blue-800">Kontrol Admin</h4>
+                         </div>
+                         <div>
+                            <label className="block text-xs font-semibold text-blue-700 mb-1">Status Dokumen</label>
+                            <select 
+                                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                value={newDocData.status}
+                                onChange={(e) => setNewDocData({...newDocData, status: e.target.value as any})}
+                            >
+                                <option value="Valid">Valid (Disetujui)</option>
+                                <option value="Draft">Draft (Sedang Proses)</option>
+                                <option value="Revisi">Revisi (Perlu Perbaikan)</option>
+                                <option value="Arsip">Arsip (Tidak Aktif)</option>
+                            </select>
+                         </div>
+                         <div>
+                            <label className="block text-xs font-semibold text-blue-700 mb-1">Catatan / Komentar Admin</label>
+                            <textarea 
+                                className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 min-h-[80px]"
+                                placeholder="Tulis catatan revisi di sini..."
+                                value={newDocData.adminComment}
+                                onChange={(e) => setNewDocData({...newDocData, adminComment: e.target.value})}
+                            />
+                         </div>
+                    </div>
+                )}
+
+                {/* ADDED DATE INPUT */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Upload</label>
+                    <input 
+                        type="date" 
+                        className="w-full px-4 py-2 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-sm"
+                        value={newDocData.date}
+                        onChange={(e) => setNewDocData({...newDocData, date: e.target.value})}
                     />
                 </div>
 

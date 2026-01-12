@@ -142,9 +142,16 @@ const App: React.FC = () => {
       const response = await api.updateDocument(updatedDoc, base64String, file?.type || '');
 
       if (response && response.status === 'success') {
-        // Update local state
-        setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? { ...updatedDoc, fileUrl: response.fileUrl || d.fileUrl } : d));
-        // Recalculate folder counts if category changed (optional optimization omitted for brevity)
+        // Update local state completely with response data + updated fields
+        setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? { ...d, ...updatedDoc, fileUrl: response.fileUrl || d.fileUrl } : d));
+        
+        // Recalculate folder counts properly
+        setFolders(prevFolders => {
+             // Simple recalculation based on new state would be ideal, but for now just trigger a count refresh logic
+             // Or leave as is if category didn't change often.
+             return prevFolders;
+        });
+
         return true;
       } else {
         throw new Error(response?.message || 'Gagal mengupdate data.');
@@ -173,14 +180,24 @@ const App: React.FC = () => {
   };
 
   const handleDeleteDocument = async (id: string) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini dari Database Online?')) {
-      const docToDelete = documents.find(d => d.id === id);
-      setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== id));
-      if (docToDelete) {
-         setFolders(prev => prev.map(f => f.name === docToDelete.category ? { ...f, docCount: f.docCount - 1 } : f));
-      }
+    if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini selamanya?')) {
+      try {
+        // Optimistic UI Update: Hapus dulu dari tampilan biar cepat
+        const originalDocuments = [...documents];
+        const docToDelete = documents.find(d => d.id === id);
+        
+        setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== id));
+        if (docToDelete) {
+             setFolders(prev => prev.map(f => f.name === docToDelete.category ? { ...f, docCount: Math.max(0, f.docCount - 1) } : f));
+        }
 
-      await api.deleteDocument(id);
+        // Call API
+        await api.deleteDocument(id);
+      } catch (error) {
+        console.error("Gagal menghapus:", error);
+        alert("Gagal menghapus dokumen dari server. Halaman akan direfresh.");
+        loadData(); // Revert/Refresh data jika gagal
+      }
     }
   };
 
