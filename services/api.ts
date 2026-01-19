@@ -6,37 +6,51 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGXiBxmDd4yszugCoud
 // Helper untuk menghandle request standard GAS
 const sendRequest = async (action: string, payload: any = {}) => {
   try {
-    // Kita kirim action di URL (untuk routing mudah) DAN di Body (untuk data)
-    // Menggunakan 'no-cors' tidak disarankan karena kita butuh response JSON.
-    // Kuncinya adalah Content-Type: text/plain untuk menghindari Preflight (OPTIONS) request yang sering gagal di GAS.
-    const response = await fetch(`${SCRIPT_URL}?action=${action}`, {
+    const url = new URL(SCRIPT_URL);
+    
+    // Clean action param
+    const cleanAction = action.split('&')[0].split('=')[0];
+    
+    url.searchParams.append('action', cleanAction);
+    url.searchParams.append('t', String(new Date().getTime())); // Cache buster
+
+    // Append ID to URL if exists in payload (Dual-send: URL params & Body)
+    if (payload && payload.id) {
+        url.searchParams.append('id', String(payload.id));
+    }
+
+    // Construct final payload
+    const finalPayload = { ...payload, action: cleanAction };
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       redirect: 'follow',
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ ...payload, action }) // Sertakan action di body juga untuk keamanan
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // Avoid CORS Preflight
+      body: JSON.stringify(finalPayload) 
     });
 
     const text = await response.text();
-    console.log(`[API ${action}] Response:`, text.substring(0, 100) + "...");
 
     if (text.trim().startsWith('<')) {
-        throw new Error("Google Script Error: Terjadi kesalahan pada server (HTML Response).");
+        console.error("GAS HTML Error:", text);
+        throw new Error("Server Error: Script Google mengalami crash atau izin ditolak.");
     }
 
     try {
       return JSON.parse(text);
     } catch (e) {
-      // Jika response text 'Success' atau plain text lainnya
       return { status: 'success', message: text }; 
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[API ${action}] Error:`, error);
+    if (error.message === 'Failed to fetch') {
+        throw new Error("Gagal terhubung ke server. Cek koneksi internet.");
+    }
     throw error;
   }
 };
 
 export const api = {
-  // 1. Get All Data (GET request remains same)
   fetchData: async () => {
     try {
       const response = await fetch(`${SCRIPT_URL}?action=getData&t=${new Date().getTime()}`);
@@ -54,46 +68,35 @@ export const api = {
     }
   },
 
-  // 2. Add Document
   addDocument: async (doc: IDocument, fileBase64: string | null, mimeType: string) => {
-    return sendRequest('addDocument', {
-        ...doc,
-        fileBase64,
-        mimeType
-    });
+    return sendRequest('addDocument', { ...doc, fileBase64, mimeType });
   },
 
-  // 3. Update Document (Revisi/Edit)
   updateDocument: async (doc: IDocument, fileBase64: string | null, mimeType: string) => {
-    return sendRequest('updateDocument', {
-        ...doc,
-        fileBase64, // Kirim null jika tidak ada file baru
-        mimeType
-    });
+    // Only include fileBase64 in payload if it's not null to save bandwidth and prevent script errors
+    const payload: any = { ...doc, mimeType };
+    if (fileBase64) {
+        payload.fileBase64 = fileBase64;
+    }
+    return sendRequest('updateDocument', payload);
   },
 
-  // 4. Delete Document
   deleteDocument: async (id: string) => {
-    // Perbaikan: Mengirim ID via Body, bukan hanya URL parameter
-    return sendRequest('deleteDocument', { id });
+    return sendRequest('deleteDocument', { id: String(id) });
   },
 
-  // 5. Add Folder
   addFolder: async (folder: FolderItem) => {
     return sendRequest('addFolder', folder);
   },
 
-  // 6. Update Folder
   updateFolder: async (folder: FolderItem) => {
     return sendRequest('updateFolder', folder);
   },
 
-  // 7. Delete Folder
   deleteFolder: async (id: string) => {
-    return sendRequest('deleteFolder', { id });
+    return sendRequest('deleteFolder', { id: String(id) });
   },
 
-  // 8. Update Config
   updateConfig: async (config: AppConfig) => {
     return sendRequest('updateConfig', config);
   }

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { IDocument, Role, FolderItem, AppConfig } from '../types';
-import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Check, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning, MessageSquare, Loader2 } from 'lucide-react';
+import { Search, Download, Plus, FileText, Trash2, X, UploadCloud, Calendar, FolderOpen, ChevronDown, ChevronRight, User, FileImage, FileSpreadsheet, FileType, File as FileIcon, AlertCircle, Files, Edit3, MessageSquareWarning, MessageSquare, Loader2 } from 'lucide-react';
 
 interface DocumentViewProps {
   userRole: Role;
@@ -9,7 +9,7 @@ interface DocumentViewProps {
   documents: IDocument[];
   onAddDocument: (doc: IDocument, file: File | null) => Promise<any>;
   onEditDocument: (doc: IDocument, file: File | null) => Promise<any>;
-  onDeleteDocument: (id: string) => void;
+  onDeleteDocument: (id: string) => Promise<boolean>;
 }
 
 const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfig, documents, onAddDocument, onEditDocument, onDeleteDocument }) => {
@@ -26,7 +26,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<{current: number, total: number, currentFile: string}>({current: 0, total: 0, currentFile: ''});
   
-  // State for deleting (loading indicator)
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [newDocData, setNewDocData] = useState({
@@ -76,22 +75,17 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFiles: File[] = Array.from(e.target.files);
-      
-      // VALIDASI: Batasi 100 file
       if (selectedFiles.length > 100) {
           alert("Maksimal upload 100 file sekaligus!");
           e.target.value = ""; 
           return;
       }
-
-      // VALIDASI: Cek ukuran per file
       const oversizedFiles = selectedFiles.filter(f => f.size > 4 * 1024 * 1024);
       if (oversizedFiles.length > 0) {
           alert(`File berikut terlalu besar (>4MB): \n${oversizedFiles.map(f=>f.name).join('\n')}\nMohon kecilkan ukuran file.`);
           e.target.value = "";
           return;
       }
-
       setNewDocData({ ...newDocData, files: selectedFiles });
       setUploadError(null);
     }
@@ -129,7 +123,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
           date: doc.uploadDate,
           status: doc.status || 'Valid',
           adminComment: doc.adminComment || '',
-          files: [] // Kosongkan file saat edit (opsional upload ulang)
+          files: [] 
       });
       setUploadError(null);
       setUploadProgress({current: 0, total: 0, currentFile: ''});
@@ -138,20 +132,16 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
 
   const handleSaveDocument = async () => {
     setUploadError(null);
-    
-    // Validasi Basic
     if (!newDocData.category || !newDocData.year || !newDocData.semester || !newDocData.date) {
-      alert('Mohon lengkapi data wajib (Tahun, Semester, Kategori, Tanggal).');
+      alert('Mohon lengkapi data wajib.');
       return;
     }
 
-    // Jika Mode Tambah Baru: Wajib ada File
     if (!isEditMode && newDocData.files.length === 0) {
         alert('Mohon pilih minimal 1 file.');
         return;
     }
 
-    // Jika Mode Edit: Nama wajib diisi
     if (isEditMode && !newDocData.name) {
         alert('Nama dokumen tidak boleh kosong.');
         return;
@@ -159,25 +149,27 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
 
     setIsUploading(true);
     
-    // ----------- MODE EDIT / REVISI -----------
+    // ----------- MODE EDIT -----------
     if (isEditMode && editingDocId) {
         setUploadProgress({ current: 1, total: 1, currentFile: newDocData.name });
         try {
-            // Cek apakah ada file baru yang diupload
+            const originalDoc = documents.find(d => d.id === editingDocId);
+            if (!originalDoc) throw new Error("Dokumen asli tidak ditemukan.");
+
             const newFile = newDocData.files.length > 0 ? newDocData.files[0] : null;
             
             const updatedDoc: IDocument = {
                 id: editingDocId,
                 title: newDocData.name,
                 category: newDocData.category,
-                type: newFile ? (newFile.name.split('.').pop()?.toUpperCase() || 'FILE') : 'UNKNOWN', 
+                type: newFile ? (newFile.name.split('.').pop()?.toUpperCase() || 'FILE') : originalDoc.type, 
                 uploadDate: newDocData.date,
-                author: 'Admin', 
-                size: newFile ? `${(newFile.size / 1024 / 1024).toFixed(2)} MB` : '0 MB', 
+                author: originalDoc.author || 'Admin', 
+                size: newFile ? `${(newFile.size / 1024 / 1024).toFixed(2)} MB` : originalDoc.size, 
                 status: newDocData.status, 
                 year: newDocData.year,
                 semester: newDocData.semester,
-                fileUrl: '', 
+                fileUrl: originalDoc.fileUrl, 
                 adminComment: newDocData.adminComment 
             };
 
@@ -192,9 +184,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
         return;
     }
 
-    // ----------- MODE TAMBAH BARU (SEQUENTIAL) -----------
+    // ----------- MODE TAMBAH -----------
     setUploadProgress({ current: 0, total: newDocData.files.length, currentFile: '' });
-
     let successCount = 0;
     let failCount = 0;
     let errors: string[] = [];
@@ -209,8 +200,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
 
         try {
             const extension = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-            // Jika single file dan ada nama input, pakai nama input. 
-            // Jika multi file, atau single file tapi nama kosong (fallback), pakai filename.
             const docTitle = (newDocData.files.length === 1 && newDocData.name)
                 ? newDocData.name 
                 : file.name.replace(/\.[^/.]+$/, "");
@@ -248,7 +237,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
     }
 
     setIsUploading(false);
-
     if (failCount === 0) {
         alert(`Berhasil mengupload ${successCount} dokumen!`);
         setIsModalOpen(false);
@@ -258,21 +246,32 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   };
 
   const handleDownload = (doc: IDocument) => {
-    if (doc.fileUrl) {
-        window.open(doc.fileUrl, '_blank');
-    } else {
-        alert("File belum tersedia atau masih dalam proses upload.");
-    }
+    if (doc.fileUrl) window.open(doc.fileUrl, '_blank');
+    else alert("File belum tersedia.");
   };
   
-  const handleDeleteClick = async (id: string) => {
+  const handleDeleteClick = async (e: React.MouseEvent, id: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      if (deletingId === id) return;
+      
       setDeletingId(id);
       try {
-        await onDeleteDocument(id);
-      } finally {
+        const success = await onDeleteDocument(id);
+        if (!success) {
+            setDeletingId(null);
+        }
+      } catch (e) {
         setDeletingId(null);
       }
   };
+
+  const handleEditClick = (e: React.MouseEvent, doc: IDocument) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditModal(doc);
+  }
 
   const getFileIcon = (type: string) => {
     const t = type.toUpperCase();
@@ -305,7 +304,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900 truncate">{doc.title}</p>
-                        {/* INDICATOR KOMENTAR ADMIN */}
                         {doc.adminComment && (
                             <div className="group/comment relative">
                                 <MessageSquareWarning size={16} className="text-orange-500 cursor-help" />
@@ -341,6 +339,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
               <td className="px-6 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
                   <button 
+                    type="button"
                     onClick={(e) => { e.stopPropagation(); handleDownload(doc); }} 
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-green-700 active:scale-95 transition-all text-xs font-bold tracking-wide"
                   >
@@ -350,7 +349,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                   {/* EDIT BUTTON */}
                   {(userRole === 'ADMIN' || doc.status === 'Revisi' || doc.adminComment) && (
                       <button 
-                        onClick={(e) => { e.stopPropagation(); openEditModal(doc); }}
+                        type="button"
+                        onClick={(e) => handleEditClick(e, doc)}
                         className="bg-amber-50 text-amber-600 p-1.5 rounded-lg border border-amber-100 hover:bg-amber-100 transition-colors"
                         title="Edit / Revisi"
                       >
@@ -361,7 +361,8 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                   {/* DELETE BUTTON */}
                   {userRole === 'ADMIN' && (
                     <button 
-                        onClick={(e) => { e.stopPropagation(); handleDeleteClick(doc.id); }}
+                        type="button"
+                        onClick={(e) => handleDeleteClick(e, doc.id)}
                         className="bg-red-50 text-red-500 p-1.5 rounded-lg border border-red-100 hover:bg-red-100 hover:text-red-700 transition-colors relative"
                         title="Hapus Dokumen"
                         disabled={deletingId === doc.id}
@@ -537,8 +538,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
             </div>
             
             <div className="p-6 space-y-4 overflow-y-auto">
-              
-              {/* Pesan Error di dalam Modal */}
               {uploadError && (
                   <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2 whitespace-pre-wrap">
                      <AlertCircle size={16} className="mt-0.5 shrink-0"/>
@@ -549,7 +548,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                   </div>
               )}
 
-              {/* TAMPILAN KOMENTAR ADMIN DI MODAL EDIT (MODE NON-ADMIN) */}
               {isEditMode && userRole !== 'ADMIN' && adminCommentToShow && (
                   <div className="p-3 bg-orange-50 border border-orange-200 text-orange-800 rounded-lg flex items-start gap-3">
                       <MessageSquareWarning size={20} className="mt-1 shrink-0 text-orange-600"/>
@@ -597,7 +595,7 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                     >
                     <input 
                         type="file" 
-                        multiple={!isEditMode} // Edit mode hanya single file replacement
+                        multiple={!isEditMode} 
                         ref={fileInputRef} 
                         className="hidden" 
                         accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
@@ -639,7 +637,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                     />
                 </div>
 
-                {/* STATUS & ADMIN COMMENT (ONLY FOR ADMIN IN EDIT MODE) */}
                 {isEditMode && userRole === 'ADMIN' && (
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-3">
                          <div className="flex items-center gap-2 mb-1">
@@ -671,7 +668,6 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
                     </div>
                 )}
 
-                {/* ADDED DATE INPUT */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Upload</label>
                     <input 

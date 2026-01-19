@@ -144,14 +144,6 @@ const App: React.FC = () => {
       if (response && response.status === 'success') {
         // Update local state completely with response data + updated fields
         setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? { ...d, ...updatedDoc, fileUrl: response.fileUrl || d.fileUrl } : d));
-        
-        // Recalculate folder counts properly
-        setFolders(prevFolders => {
-             // Simple recalculation based on new state would be ideal, but for now just trigger a count refresh logic
-             // Or leave as is if category didn't change often.
-             return prevFolders;
-        });
-
         return true;
       } else {
         throw new Error(response?.message || 'Gagal mengupdate data.');
@@ -179,7 +171,8 @@ const App: React.FC = () => {
       }
   };
 
-  const handleDeleteDocument = async (id: string) => {
+  // Change to return boolean (Success/Fail)
+  const handleDeleteDocument = async (id: string): Promise<boolean> => {
     if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini selamanya?')) {
       try {
         // Optimistic UI Update: Hapus dulu dari tampilan biar cepat
@@ -192,13 +185,22 @@ const App: React.FC = () => {
         }
 
         // Call API
-        await api.deleteDocument(id);
-      } catch (error) {
+        const response = await api.deleteDocument(id);
+        
+        // If API explicitly returns error status despite 200 OK
+        if (response && response.status === 'error') {
+            throw new Error(response.message);
+        }
+
+        return true;
+      } catch (error: any) {
         console.error("Gagal menghapus:", error);
-        alert("Gagal menghapus dokumen dari server. Halaman akan direfresh.");
+        alert(`Gagal menghapus dokumen: ${error.message || 'Unknown error'}. Halaman akan direfresh.`);
         loadData(); // Revert/Refresh data jika gagal
+        return false;
       }
     }
+    return false; // User cancelled
   };
 
   const handleUpdateFolders = async (newFolders: FolderItem[]) => {
