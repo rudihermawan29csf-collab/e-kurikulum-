@@ -252,24 +252,31 @@ const DocumentView: React.FC<DocumentViewProps> = ({ userRole, folders, appConfi
   
   const handleDeleteClick = async (e: React.MouseEvent, id: string) => {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopPropagation(); // Mencegah klik baris tabel
       
       if (deletingId === id) return;
+
+      // KONFIRMASI PENGHAPUSAN
+      const isConfirmed = window.confirm('Apakah Anda yakin ingin menghapus dokumen ini selamanya? Tindakan ini tidak dapat dibatalkan.');
       
-      setDeletingId(id);
-      try {
-        const success = await onDeleteDocument(id);
-        if (!success) {
+      if (isConfirmed) {
+          setDeletingId(id);
+          try {
+            const success = await onDeleteDocument(id);
+            if (!success) {
+                setDeletingId(null);
+            }
+          } catch (e) {
+            console.error("Delete error:", e);
             setDeletingId(null);
-        }
-      } catch (e) {
-        setDeletingId(null);
+            alert("Gagal menghapus dokumen. Silakan coba lagi.");
+          }
       }
   };
 
   const handleEditClick = (e: React.MouseEvent, doc: IDocument) => {
       e.preventDefault();
-      e.stopPropagation();
+      e.stopPropagation(); // Mencegah klik baris tabel
       openEditModal(doc);
   }
 

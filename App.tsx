@@ -172,8 +172,8 @@ const App: React.FC = () => {
   };
 
   // Change to return boolean (Success/Fail)
+  // REMOVED window.confirm from here to avoid double confirmation
   const handleDeleteDocument = async (id: string): Promise<boolean> => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus dokumen ini selamanya?')) {
       try {
         // Optimistic UI Update: Hapus dulu dari tampilan biar cepat
         const originalDocuments = [...documents];
@@ -199,8 +199,6 @@ const App: React.FC = () => {
         loadData(); // Revert/Refresh data jika gagal
         return false;
       }
-    }
-    return false; // User cancelled
   };
 
   const handleUpdateFolders = async (newFolders: FolderItem[]) => {
